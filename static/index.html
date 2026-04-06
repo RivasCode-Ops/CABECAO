@@ -49,6 +49,7 @@
           <table>
             <thead>
               <tr>
+                <th title="Mais recente primeiro (número maior)">Nº↓</th>
                 <th>SKU</th>
                 <th>Nome</th>
                 <th>Qtd</th>
@@ -89,11 +90,28 @@
       </section>
 
       <section id="p-listas" class="panel">
-        <h2 style="margin-top: 0; font-size: 1.1rem">Últimas compras</h2>
+        <p class="sub" style="margin-top: 0">
+          Ordem <strong>decrescente</strong> (data mais recente primeiro). <strong>Nº</strong> é a posição global (maior = mais novo).
+          Use <strong>Próxima</strong> para a página seguinte.
+        </p>
+        <div class="hist-filtro">
+          <label
+            >Filtrar por ano
+            <input type="number" id="hist-ano" min="2000" max="2100" placeholder="todos" style="width: 6rem" />
+          </label>
+        </div>
+
+        <h2 style="margin-top: 0; font-size: 1.1rem">Compras</h2>
+        <div class="pager">
+          <button type="button" class="btn small" id="pc-prev">Anterior</button>
+          <span id="pc-info">—</span>
+          <button type="button" class="btn small" id="pc-next">Próxima</button>
+        </div>
         <div style="overflow-x: auto">
           <table>
             <thead>
               <tr>
+                <th title="Posição global (decrescente)">Nº↓</th>
                 <th>ID</th>
                 <th>Data</th>
                 <th>Linhas</th>
@@ -102,11 +120,18 @@
             <tbody id="tbl-compras"></tbody>
           </table>
         </div>
-        <h2 style="font-size: 1.1rem">Últimas vendas</h2>
+
+        <h2 style="font-size: 1.1rem">Vendas</h2>
+        <div class="pager">
+          <button type="button" class="btn small" id="pv-prev">Anterior</button>
+          <span id="pv-info">—</span>
+          <button type="button" class="btn small" id="pv-next">Próxima</button>
+        </div>
         <div style="overflow-x: auto">
           <table>
             <thead>
               <tr>
+                <th title="Posição global (decrescente)">Nº↓</th>
                 <th>ID</th>
                 <th>Data</th>
                 <th>Linhas</th>
@@ -179,17 +204,37 @@
         try {
           productsCache = await api("/products");
           const tb = $("#tbl-produtos");
+          const n = productsCache.length;
           tb.innerHTML = productsCache
-            .map(
-              (p) =>
-                `<tr><td>${escapeHtml(p.sku)}</td><td>${escapeHtml(p.name)}</td><td>${p.qty_on_hand}</td><td>${p.avg_cost}</td></tr>`
-            )
+            .map((p, idx) => {
+              const rank = n - idx;
+              return `<tr><td>${rank}</td><td>${escapeHtml(p.sku)}</td><td>${escapeHtml(p.name)}</td><td>${p.qty_on_hand}</td><td>${p.avg_cost}</td></tr>`;
+            })
             .join("");
           $$("select[data-product-select]").forEach((sel) => fillProductSelect(sel));
         } catch (e) {
-          $("#tbl-produtos").innerHTML = `<tr><td colspan="4">${escapeHtml(e.message)}</td></tr>`;
+          $("#tbl-produtos").innerHTML = `<tr><td colspan="5">${escapeHtml(e.message)}</td></tr>`;
         }
       }
+
+      function renderMovRows(items, total, page, pageSize) {
+        let html = "";
+        let prevYear = null;
+        items.forEach((x, idx) => {
+          const yyyy = String(x.occurred_on).slice(0, 4);
+          if (yyyy !== prevYear) {
+            html += `<tr class="year-sep"><td colspan="4">Ano ${yyyy}</td></tr>`;
+            prevYear = yyyy;
+          }
+          const rank = total - (page - 1) * pageSize - idx;
+          html += `<tr><td>${rank}</td><td>${x.id}</td><td>${x.occurred_on}</td><td>${x.lines.length}</td></tr>`;
+        });
+        return html;
+      }
+
+      let pageCompras = 1;
+      let pageVendas = 1;
+      const pageSizeHist = 10;
 
       function escapeHtml(s) {
         const d = document.createElement("div");
@@ -328,26 +373,89 @@
       });
 
       async function loadLists() {
+        const ano = $("#hist-ano").value.trim();
+        const yq = ano ? `&year=${encodeURIComponent(ano)}` : "";
         try {
-          const [compras, vendas] = await Promise.all([api("/purchases"), api("/sales")]);
-          $("#tbl-compras").innerHTML = compras
-            .slice(0, 30)
-            .map(
-              (x) =>
-                `<tr><td>${x.id}</td><td>${x.occurred_on}</td><td>${x.lines.length}</td></tr>`
-            )
-            .join("");
-          $("#tbl-vendas").innerHTML = vendas
-            .slice(0, 30)
-            .map(
-              (x) =>
-                `<tr><td>${x.id}</td><td>${x.occurred_on}</td><td>${x.lines.length}</td></tr>`
-            )
-            .join("");
+          const [c, v] = await Promise.all([
+            api(`/purchases?page=${pageCompras}&page_size=${pageSizeHist}${yq}`),
+            api(`/sales?page=${pageVendas}&page_size=${pageSizeHist}${yq}`),
+          ]);
+
+          let reload = false;
+          if (c.total === 0) pageCompras = 1;
+          else {
+            const maxC = Math.max(1, c.total_pages);
+            if (pageCompras > maxC) {
+              pageCompras = maxC;
+              reload = true;
+            }
+          }
+          if (v.total === 0) pageVendas = 1;
+          else {
+            const maxV = Math.max(1, v.total_pages);
+            if (pageVendas > maxV) {
+              pageVendas = maxV;
+              reload = true;
+            }
+          }
+          if (reload) return loadLists();
+
+          $("#tbl-compras").innerHTML =
+            c.total === 0
+              ? `<tr><td colspan="4">Nenhuma compra.</td></tr>`
+              : renderMovRows(c.items, c.total, c.page, c.page_size);
+
+          $("#tbl-vendas").innerHTML =
+            v.total === 0
+              ? `<tr><td colspan="4">Nenhuma venda.</td></tr>`
+              : renderMovRows(v.items, v.total, v.page, v.page_size);
+
+          const fmt = (x) =>
+            x.total === 0
+              ? "0 registros"
+              : `Página ${x.page} / ${Math.max(1, x.total_pages)} · ${x.total} total`;
+
+          $("#pc-info").textContent = fmt(c);
+          $("#pv-info").textContent = fmt(v);
+
+          $("#pc-prev").disabled = c.total === 0 || c.page <= 1;
+          $("#pc-next").disabled = c.total === 0 || c.page >= Math.max(1, c.total_pages);
+          $("#pv-prev").disabled = v.total === 0 || v.page <= 1;
+          $("#pv-next").disabled = v.total === 0 || v.page >= Math.max(1, v.total_pages);
         } catch (e) {
-          $("#tbl-compras").innerHTML = `<tr><td colspan="3">${escapeHtml(e.message)}</td></tr>`;
+          $("#tbl-compras").innerHTML = `<tr><td colspan="4">${escapeHtml(e.message)}</td></tr>`;
+          $("#tbl-vendas").innerHTML = "";
+          $("#pc-info").textContent = "—";
+          $("#pv-info").textContent = "—";
         }
       }
+
+      $("#hist-ano").addEventListener("change", () => {
+        pageCompras = 1;
+        pageVendas = 1;
+        loadLists();
+      });
+
+      $("#pc-prev").addEventListener("click", () => {
+        if (pageCompras > 1) {
+          pageCompras--;
+          loadLists();
+        }
+      });
+      $("#pc-next").addEventListener("click", () => {
+        pageCompras++;
+        loadLists();
+      });
+      $("#pv-prev").addEventListener("click", () => {
+        if (pageVendas > 1) {
+          pageVendas--;
+          loadLists();
+        }
+      });
+      $("#pv-next").addEventListener("click", () => {
+        pageVendas++;
+        loadLists();
+      });
 
       $("#c-data").value = todayISODate();
       $("#v-data").value = todayISODate();

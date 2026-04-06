@@ -96,3 +96,19 @@ class DashboardSummary(BaseModel):
     products_count: int
     purchases_count: int
     sales_count: int
+
+
+class PaginatedPurchases(BaseModel):
+    items: list[PurchaseOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class PaginatedSales(BaseModel):
+    items: list[SaleOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

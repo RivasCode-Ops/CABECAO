@@ -16,8 +16,8 @@ Sistema **self-hosted**: contabilidade em **partidas dobradas**, **estoque com c
 
 - `GET /api/dashboard/summary` — saldos de Caixa e Estoque, contagens
 - `GET|POST /api/products`
-- `GET|POST /api/purchases` · `GET /api/purchases/{id}`
-- `GET|POST /api/sales` · `GET /api/sales/{id}`
+- `GET|POST /api/purchases` · `GET /api/purchases/{id}` — listagem paginada: `?page=1&page_size=20&year=2026` (data **decrescente**)
+- `GET|POST /api/sales` · `GET /api/sales/{id}` — idem
 
 Detalhes em `/docs` (Swagger).
 

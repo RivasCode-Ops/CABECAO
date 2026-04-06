@@ -1,7 +1,8 @@
+import math
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +11,8 @@ from app.database import get_session
 from app.models import Product, Purchase, Sale
 from app.schemas import (
     DashboardSummary,
+    PaginatedPurchases,
+    PaginatedSales,
     ProductCreate,
     ProductOut,
     PurchaseCreate,
@@ -19,6 +22,8 @@ from app.schemas import (
 )
 from app.services.ledger import get_account_balance, get_account_by_code
 from app.services.operations import load_purchase_with_lines, load_sale_with_lines, record_purchase, record_sale
+from app.utils.money import money
+
 router = APIRouter()
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -49,7 +54,8 @@ async def dashboard_summary(session: SessionDep) -> DashboardSummary:
 
 @router.get("/products", response_model=list[ProductOut])
 async def list_products(session: SessionDep) -> list[Product]:
-    r = await session.execute(select(Product).order_by(Product.sku))
+    """Produtos mais recentes primeiro (id decrescente)."""
+    r = await session.execute(select(Product).order_by(Product.id.desc()))
     return list(r.scalars().all())
 
 
@@ -96,15 +102,39 @@ async def create_purchase(data: PurchaseCreate, session: SessionDep) -> Purchase
     return full
 
 
-@router.get("/purchases", response_model=list[PurchaseOut])
-async def list_purchases(session: SessionDep) -> list[Purchase]:
+@router.get("/purchases", response_model=PaginatedPurchases)
+async def list_purchases(
+    session: SessionDep,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    year: int | None = Query(None, description="Filtrar pelo ano da data do movimento"),
+) -> PaginatedPurchases:
+    """Lista compras: data mais recente primeiro; paginação e filtro por ano opcional."""
+    count_q = select(func.count()).select_from(Purchase)
+    q = select(Purchase)
+    if year is not None:
+        yf = extract("year", Purchase.occurred_on) == year
+        count_q = count_q.where(yf)
+        q = q.where(yf)
+
+    total = int(await session.scalar(count_q) or 0)
+
     q = (
-        select(Purchase)
-        .order_by(Purchase.occurred_on.desc(), Purchase.id.desc())
+        q.order_by(Purchase.occurred_on.desc(), Purchase.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .options(selectinload(Purchase.lines))
     )
     r = await session.execute(q)
-    return list(r.scalars().unique().all())
+    items = list(r.scalars().unique().all())
+    total_pages = math.ceil(total / page_size) if page_size else 0
+    return PaginatedPurchases(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/purchases/{purchase_id}", response_model=PurchaseOut)
@@ -138,15 +168,39 @@ async def create_sale(data: SaleCreate, session: SessionDep) -> Sale:
     return full
 
 
-@router.get("/sales", response_model=list[SaleOut])
-async def list_sales(session: SessionDep) -> list[Sale]:
+@router.get("/sales", response_model=PaginatedSales)
+async def list_sales(
+    session: SessionDep,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    year: int | None = Query(None, description="Filtrar pelo ano da data do movimento"),
+) -> PaginatedSales:
+    """Lista vendas: data mais recente primeiro; paginação e filtro por ano opcional."""
+    count_q = select(func.count()).select_from(Sale)
+    q = select(Sale)
+    if year is not None:
+        yf = extract("year", Sale.occurred_on) == year
+        count_q = count_q.where(yf)
+        q = q.where(yf)
+
+    total = int(await session.scalar(count_q) or 0)
+
     q = (
-        select(Sale)
-        .order_by(Sale.occurred_on.desc(), Sale.id.desc())
+        q.order_by(Sale.occurred_on.desc(), Sale.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .options(selectinload(Sale.lines))
     )
     r = await session.execute(q)
-    return list(r.scalars().unique().all())
+    items = list(r.scalars().unique().all())
+    total_pages = math.ceil(total / page_size) if page_size else 0
+    return PaginatedSales(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/sales/{sale_id}", response_model=SaleOut)
