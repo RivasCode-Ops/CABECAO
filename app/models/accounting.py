@@ -56,3 +56,4 @@ class JournalLine(Base):
     credit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
 
     entry: Mapped["JournalEntry"] = relationship(back_populates="lines")
+    account: Mapped["Account"] = relationship()

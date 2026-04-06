@@ -112,3 +112,36 @@ class PaginatedSales(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class PeriodReport(BaseModel):
+    from_date: date
+    to_date: date
+    revenue: str
+    cogs: str
+    gross_profit: str
+    margin_percent: str | None = None
+
+
+class JournalLineDetail(BaseModel):
+    account_code: str
+    account_name: str
+    debit: str
+    credit: str
+
+
+class JournalEntryOut(BaseModel):
+    id: int
+    occurred_on: date
+    memo: str | None
+    source: str
+    ref_id: str | None
+    lines: list[JournalLineDetail]
+
+
+class PaginatedJournalEntries(BaseModel):
+    items: list[JournalEntryOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

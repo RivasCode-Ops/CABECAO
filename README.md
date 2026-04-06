@@ -10,7 +10,8 @@ Sistema **self-hosted**: contabilidade em **partidas dobradas**, **estoque com c
 | Produtos | Cadastro SKU/nome, quantidade e custo médio |
 | Compras | Dr Estoque / Cr Caixa; atualiza custo médio |
 | Vendas | Dr Caixa / Cr Receita e Dr CMV / Cr Estoque; valida estoque |
-| Painel | Abas: resumo, produtos, nova compra/venda, histórico |
+| Relatório | DRE simplificado (receita, CMV, lucro bruto, margem %) por período; listagem do **razão** (lançamentos) paginada |
+| Painel | Abas: resumo, produtos, compra/venda, histórico (paginação), relatório |
 
 ### API (`/api`)
 
@@ -18,6 +19,8 @@ Sistema **self-hosted**: contabilidade em **partidas dobradas**, **estoque com c
 - `GET|POST /api/products`
 - `GET|POST /api/purchases` · `GET /api/purchases/{id}` — listagem paginada: `?page=1&page_size=20&year=2026` (data **decrescente**)
 - `GET|POST /api/sales` · `GET /api/sales/{id}` — idem
+- `GET /api/reports/pl?from=YYYY-MM-DD&to=YYYY-MM-DD` — receita, CMV, lucro bruto e margem % no período
+- `GET /api/journal?page=1&page_size=15` — razão (lançamentos com linhas e contas), data decrescente
 
 Detalhes em `/docs` (Swagger).
 

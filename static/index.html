@@ -29,6 +29,7 @@
         <button type="button" class="tab" data-panel="p-compra">Nova compra</button>
         <button type="button" class="tab" data-panel="p-venda">Nova venda</button>
         <button type="button" class="tab" data-panel="p-listas">Histórico</button>
+        <button type="button" class="tab" data-panel="p-relatorio">Relatório</button>
       </div>
 
       <section id="p-resumo" class="panel active">
@@ -142,6 +143,29 @@
         </div>
       </section>
 
+      <section id="p-relatorio" class="panel">
+        <h2 style="margin-top: 0; font-size: 1.1rem">Resultado no período (DRE simplificado)</h2>
+        <p class="sub" style="margin-top: 0">
+          Receita e CMV vêm dos lançamentos no razão (contas <code>4.1.01</code> e <code>5.1.01</code>) entre as datas.
+        </p>
+        <div class="form-row">
+          <label>De <input type="date" id="pl-from" /></label>
+          <label>Até <input type="date" id="pl-to" /></label>
+          <button type="button" class="btn primary" id="btn-pl">Atualizar</button>
+        </div>
+        <div class="grid-kpi" id="pl-box"></div>
+        <p class="sub" id="pl-msg"></p>
+
+        <h2 style="font-size: 1.1rem">Razão (lançamentos contábeis)</h2>
+        <p class="sub">Ordem decrescente por data. Cada bloco é um lançamento com partidas dobradas.</p>
+        <div class="pager">
+          <button type="button" class="btn small" id="pj-prev">Anterior</button>
+          <span id="pj-info">—</span>
+          <button type="button" class="btn small" id="pj-next">Próxima</button>
+        </div>
+        <div id="journal-box"></div>
+      </section>
+
       <footer>API: <code>/api</code> · saúde: <a href="/health">/health</a> · banco: <a href="/health/db">/health/db</a></footer>
     </div>
 
@@ -153,6 +177,12 @@
         const d = new Date();
         const z = (n) => String(n).padStart(2, "0");
         return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate());
+      }
+
+      function firstDayOfMonthISO() {
+        const d = new Date();
+        const z = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-01";
       }
 
       async function api(path, opts = {}) {
@@ -297,6 +327,84 @@
         el.textContent = text;
       }
 
+      async function loadPl() {
+        const fr = $("#pl-from").value;
+        const to = $("#pl-to").value;
+        $("#pl-msg").textContent = "";
+        $("#pl-box").innerHTML = "";
+        if (!fr || !to) {
+          $("#pl-msg").textContent = "Informe as duas datas.";
+          return;
+        }
+        try {
+          const p = await api(`/reports/pl?from=${encodeURIComponent(fr)}&to=${encodeURIComponent(to)}`);
+          $("#pl-box").innerHTML = [
+            ["Receita (R$)", p.revenue],
+            ["CMV (R$)", p.cogs],
+            ["Lucro bruto (R$)", p.gross_profit],
+            ["Margem s/ receita (%)", p.margin_percent != null ? p.margin_percent : "—"],
+          ]
+            .map(([k, v]) => `<div class="kpi"><span>${k}</span><strong>${v}</strong></div>`)
+            .join("");
+        } catch (e) {
+          $("#pl-msg").textContent = e.message;
+        }
+      }
+
+      let pageJournal = 1;
+      const pageSizeJournal = 8;
+
+      async function loadJournal() {
+        $("#journal-box").innerHTML = "<p class='sub'>Carregando…</p>";
+        try {
+          const j = await api(`/journal?page=${pageJournal}&page_size=${pageSizeJournal}`);
+          let reload = false;
+          if (j.total === 0) pageJournal = 1;
+          else {
+            const maxP = Math.max(1, j.total_pages);
+            if (pageJournal > maxP) {
+              pageJournal = maxP;
+              reload = true;
+            }
+          }
+          if (reload) return loadJournal();
+
+          const fmt =
+            j.total === 0 ? "0 lançamentos" : `Página ${j.page} / ${Math.max(1, j.total_pages)} · ${j.total} total`;
+          $("#pj-info").textContent = fmt;
+          $("#pj-prev").disabled = j.total === 0 || j.page <= 1;
+          $("#pj-next").disabled = j.total === 0 || j.page >= Math.max(1, j.total_pages);
+
+          if (j.total === 0) {
+            $("#journal-box").innerHTML = "<p class='sub'>Nenhum lançamento.</p>";
+            return;
+          }
+
+          $("#journal-box").innerHTML = j.items
+            .map((e) => {
+              const rows = e.lines
+                .map(
+                  (ln) =>
+                    `<tr><td>${escapeHtml(ln.account_code)}</td><td>${escapeHtml(ln.account_name)}</td><td>${ln.debit}</td><td>${ln.credit}</td></tr>`
+                )
+                .join("");
+              const ref = e.ref_id ? " · " + escapeHtml(e.ref_id) : "";
+              return `<div class="je-card"><div class="je-head">#${e.id} · ${e.occurred_on} · ${escapeHtml(
+                e.source
+              )}${ref}</div><div style="overflow-x:auto"><table><thead><tr><th>Conta</th><th>Nome</th><th>Débito</th><th>Crédito</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+            })
+            .join("");
+        } catch (e) {
+          $("#journal-box").innerHTML = `<p class="msg err">${escapeHtml(e.message)}</p>`;
+          $("#pj-info").textContent = "—";
+        }
+      }
+
+      async function loadRelatorio() {
+        await loadPl();
+        await loadJournal();
+      }
+
       // Tabs
       $$(".tab").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -305,7 +413,21 @@
           btn.classList.add("active");
           $("#" + btn.dataset.panel).classList.add("active");
           if (btn.dataset.panel === "p-listas") loadLists();
+          if (btn.dataset.panel === "p-relatorio") loadRelatorio();
         });
+      });
+
+      $("#btn-pl").addEventListener("click", () => loadPl());
+
+      $("#pj-prev").addEventListener("click", () => {
+        if (pageJournal > 1) {
+          pageJournal--;
+          loadJournal();
+        }
+      });
+      $("#pj-next").addEventListener("click", () => {
+        pageJournal++;
+        loadJournal();
       });
 
       $("#btn-produto").addEventListener("click", async () => {
@@ -459,6 +581,8 @@
 
       $("#c-data").value = todayISODate();
       $("#v-data").value = todayISODate();
+      $("#pl-from").value = firstDayOfMonthISO();
+      $("#pl-to").value = todayISODate();
 
       (async function init() {
         await loadProducts();

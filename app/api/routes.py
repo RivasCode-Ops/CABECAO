@@ -1,4 +1,6 @@
 import math
+from datetime import date
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,10 +11,15 @@ from sqlalchemy.orm import selectinload
 from app.constants import ACC_CASH, ACC_INVENTORY
 from app.database import get_session
 from app.models import Product, Purchase, Sale
+from app.models.accounting import JournalEntry, JournalLine
 from app.schemas import (
     DashboardSummary,
+    JournalEntryOut,
+    JournalLineDetail,
+    PaginatedJournalEntries,
     PaginatedPurchases,
     PaginatedSales,
+    PeriodReport,
     ProductCreate,
     ProductOut,
     PurchaseCreate,
@@ -22,11 +29,33 @@ from app.schemas import (
 )
 from app.services.ledger import get_account_balance, get_account_by_code
 from app.services.operations import load_purchase_with_lines, load_sale_with_lines, record_purchase, record_sale
+from app.services.reports import profit_and_loss
 from app.utils.money import money
 
 router = APIRouter()
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+def _journal_entry_out(entry: JournalEntry) -> JournalEntryOut:
+    lines_sorted = sorted(entry.lines, key=lambda ln: ln.id)
+    lines = [
+        JournalLineDetail(
+            account_code=ln.account.code,
+            account_name=ln.account.name,
+            debit=str(money(ln.debit)),
+            credit=str(money(ln.credit)),
+        )
+        for ln in lines_sorted
+    ]
+    return JournalEntryOut(
+        id=entry.id,
+        occurred_on=entry.occurred_on,
+        memo=entry.memo,
+        source=entry.source.value,
+        ref_id=entry.ref_id,
+        lines=lines,
+    )
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
@@ -209,3 +238,59 @@ async def get_sale(sale_id: int, session: SessionDep) -> Sale:
     if not s:
         raise HTTPException(404, "Venda não encontrada.")
     return s
+
+
+@router.get("/reports/pl", response_model=PeriodReport)
+async def report_pl(
+    session: SessionDep,
+    from_date: date = Query(..., alias="from"),
+    to_date: date = Query(..., alias="to"),
+) -> PeriodReport:
+    """Receita (créditos em Receita), CMV e lucro bruto no período, com margem % sobre receita."""
+    if from_date > to_date:
+        raise HTTPException(400, "Data inicial não pode ser maior que a final.")
+    try:
+        revenue, cogs, gross = await profit_and_loss(session, from_date, to_date)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+    margin_pct: str | None = None
+    if revenue > 0:
+        margin_pct = str(money((gross / revenue) * Decimal("100")))
+    return PeriodReport(
+        from_date=from_date,
+        to_date=to_date,
+        revenue=str(revenue),
+        cogs=str(cogs),
+        gross_profit=str(gross),
+        margin_percent=margin_pct,
+    )
+
+
+@router.get("/journal", response_model=PaginatedJournalEntries)
+async def list_journal(
+    session: SessionDep,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(15, ge=1, le=100),
+) -> PaginatedJournalEntries:
+    """Livro-razão: lançamentos com linhas e contas (data decrescente)."""
+    count_q = select(func.count()).select_from(JournalEntry)
+    total = int(await session.scalar(count_q) or 0)
+
+    q = (
+        select(JournalEntry)
+        .order_by(JournalEntry.occurred_on.desc(), JournalEntry.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .options(selectinload(JournalEntry.lines).selectinload(JournalLine.account))
+    )
+    r = await session.execute(q)
+    rows = list(r.scalars().unique().all())
+    items = [_journal_entry_out(e) for e in rows]
+    total_pages = math.ceil(total / page_size) if page_size else 0
+    return PaginatedJournalEntries(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )

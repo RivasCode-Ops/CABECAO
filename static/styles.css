@@ -288,3 +288,27 @@ footer {
 .hist-filtro label {
   margin: 0;
 }
+
+.je-card {
+  background: #121a26;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.je-head {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: #0f1419;
+}
+
+.je-card table {
+  font-size: 0.82rem;
+}
+
+.je-card th {
+  font-size: 0.72rem;
+}
