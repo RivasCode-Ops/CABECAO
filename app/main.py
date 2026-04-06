@@ -7,8 +7,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
+from app.api.routes import router as api_router
 from app.config import settings
 from app.database import Base, SessionLocal, engine
+from app.services.seed import seed_chart_accounts
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -17,11 +19,15 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 async def lifespan(_: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with SessionLocal() as session:
+        await seed_chart_accounts(session)
+        await session.commit()
     yield
     await engine.dispose()
 
 
 app = FastAPI(title="cabecao", version="0.1.0", lifespan=lifespan)
+app.include_router(api_router, prefix="/api")
 
 
 @app.get("/health")

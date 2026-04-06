@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CABECAO — Painel</title>
+    <title>CABECAO — Sistema</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
@@ -15,79 +15,351 @@
   <body>
     <div class="wrap">
       <header>
-        <div class="badge">Self-hosted</div>
+        <div class="badge">Self-hosted · contabilidade + estoque</div>
         <h1>CABECAO</h1>
         <p class="sub">
-          Contabilidade e estoque em servidor próprio. Este painel testa a API pelo seu navegador na mesma URL.
+          Compras e vendas à vista geram lançamentos (Caixa, Estoque, Receita, CMV). Use o painel abaixo ou a
+          <a href="/docs" target="_blank" rel="noopener">API Swagger</a>.
         </p>
       </header>
 
-      <div class="grid">
-        <div class="card">
-          <h2>API</h2>
-          <div class="status" id="api-status">
-            <span class="dot pending" id="api-dot"></span>
-            <span id="api-text">Verificando…</span>
-          </div>
-          <p class="meta" id="api-meta"></p>
-        </div>
-        <div class="card">
-          <h2>Banco de dados</h2>
-          <div class="status" id="db-status">
-            <span class="dot pending" id="db-dot"></span>
-            <span id="db-text">Verificando…</span>
-          </div>
-          <p class="meta" id="db-meta"></p>
-        </div>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" data-panel="p-resumo">Resumo</button>
+        <button type="button" class="tab" data-panel="p-produtos">Produtos</button>
+        <button type="button" class="tab" data-panel="p-compra">Nova compra</button>
+        <button type="button" class="tab" data-panel="p-venda">Nova venda</button>
+        <button type="button" class="tab" data-panel="p-listas">Histórico</button>
       </div>
 
-      <div class="actions">
-        <button type="button" class="btn" id="btn-refresh">Atualizar status</button>
-        <a class="btn primary" href="/docs" target="_blank" rel="noopener">Abrir documentação Swagger</a>
-        <a class="btn" href="/health" target="_blank" rel="noopener">JSON /health</a>
-      </div>
+      <section id="p-resumo" class="panel active">
+        <div class="grid-kpi" id="kpi"></div>
+        <p class="sub" id="resumo-status">Carregando…</p>
+      </section>
 
-      <footer>
-        URL atual: <span id="origin"></span> — use o mesmo host/porta onde o Uvicorn estiver rodando.
-      </footer>
+      <section id="p-produtos" class="panel">
+        <h2 style="margin-top: 0; font-size: 1.1rem">Cadastrar produto</h2>
+        <div class="form-row">
+          <label>SKU <input type="text" id="p-sku" placeholder="ex: SKU-001" /></label>
+          <label>Nome <input type="text" id="p-nome" placeholder="Descrição" /></label>
+          <button type="button" class="btn primary" id="btn-produto">Salvar</button>
+        </div>
+        <div id="msg-produto"></div>
+        <h2 style="font-size: 1.1rem">Estoque</h2>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Nome</th>
+                <th>Qtd</th>
+                <th>Custo médio</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-produtos"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="p-compra" class="panel">
+        <div class="form-row">
+          <label>Data <input type="date" id="c-data" /></label>
+          <label style="flex: 1">Observação <input type="text" id="c-note" placeholder="opcional" /></label>
+        </div>
+        <div class="lines-block">
+          <strong style="font-size: 0.85rem; color: var(--muted)">Itens</strong>
+          <div id="c-lines"></div>
+          <button type="button" class="btn small" id="c-add-line">+ Linha</button>
+        </div>
+        <button type="button" class="btn primary" id="btn-compra">Registrar compra</button>
+        <div id="msg-compra"></div>
+      </section>
+
+      <section id="p-venda" class="panel">
+        <div class="form-row">
+          <label>Data <input type="date" id="v-data" /></label>
+          <label style="flex: 1">Observação <input type="text" id="v-note" placeholder="opcional" /></label>
+        </div>
+        <div class="lines-block">
+          <strong style="font-size: 0.85rem; color: var(--muted)">Itens</strong>
+          <div id="v-lines"></div>
+          <button type="button" class="btn small" id="v-add-line">+ Linha</button>
+        </div>
+        <button type="button" class="btn primary" id="btn-venda">Registrar venda</button>
+        <div id="msg-venda"></div>
+      </section>
+
+      <section id="p-listas" class="panel">
+        <h2 style="margin-top: 0; font-size: 1.1rem">Últimas compras</h2>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Data</th>
+                <th>Linhas</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-compras"></tbody>
+          </table>
+        </div>
+        <h2 style="font-size: 1.1rem">Últimas vendas</h2>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Data</th>
+                <th>Linhas</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-vendas"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>API: <code>/api</code> · saúde: <a href="/health">/health</a> · banco: <a href="/health/db">/health/db</a></footer>
     </div>
 
     <script>
-      const $ = (id) => document.getElementById(id);
+      const $ = (s, el = document) => el.querySelector(s);
+      const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
-      function setCard(prefix, ok, text, meta) {
-        const dot = $(prefix + "-dot");
-        const t = $(prefix + "-text");
-        const m = $(prefix + "-meta");
-        dot.className = "dot " + (ok === true ? "ok" : ok === false ? "err" : "pending");
-        t.textContent = text;
-        m.textContent = meta || "";
+      function todayISODate() {
+        const d = new Date();
+        const z = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate());
       }
 
-      async function check() {
-        setCard("api", null, "Verificando…", "");
-        setCard("db", null, "Verificando…", "");
-
+      async function api(path, opts = {}) {
+        const r = await fetch("/api" + path, {
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          ...opts,
+        });
+        const text = await r.text();
+        let data;
         try {
-          const r = await fetch("/health", { cache: "no-store" });
-          const j = await r.json();
-          setCard("api", r.ok, r.ok ? "Online" : "Erro", JSON.stringify(j));
-        } catch (e) {
-          setCard("api", false, "Offline ou CORS", String(e.message));
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = text;
         }
+        if (!r.ok) {
+          const det = data && data.detail;
+          const msg = typeof det === "string" ? det : Array.isArray(det) ? det.map((e) => e.msg).join("; ") : r.statusText;
+          throw new Error(msg || "Erro na API");
+        }
+        return data;
+      }
 
+      async function loadSummary() {
+        const el = $("#resumo-status");
+        $("#kpi").innerHTML = "";
         try {
-          const r = await fetch("/health/db", { cache: "no-store" });
-          const j = await r.json();
-          setCard("db", r.ok, r.ok ? "Conectado" : "Erro", JSON.stringify(j));
+          const s = await api("/dashboard/summary");
+          el.textContent = "Saldos contábeis (Caixa e Estoque) com base nos lançamentos.";
+          $("#kpi").innerHTML = [
+            ["Caixa (R$)", s.cash_balance],
+            ["Estoque contábil (R$)", s.inventory_balance],
+            ["Produtos", s.products_count],
+            ["Compras", s.purchases_count],
+            ["Vendas", s.sales_count],
+          ]
+            .map(
+              ([k, v]) =>
+                `<div class="kpi"><span>${k}</span><strong>${v}</strong></div>`
+            )
+            .join("");
         } catch (e) {
-          setCard("db", false, "Falhou", String(e.message));
+          el.textContent = "Erro: " + e.message + " (PostgreSQL rodando? .env configurado?)";
         }
       }
 
-      $("origin").textContent = window.location.origin;
-      $("btn-refresh").addEventListener("click", check);
-      check();
+      let productsCache = [];
+
+      async function loadProducts() {
+        try {
+          productsCache = await api("/products");
+          const tb = $("#tbl-produtos");
+          tb.innerHTML = productsCache
+            .map(
+              (p) =>
+                `<tr><td>${escapeHtml(p.sku)}</td><td>${escapeHtml(p.name)}</td><td>${p.qty_on_hand}</td><td>${p.avg_cost}</td></tr>`
+            )
+            .join("");
+          $$("select[data-product-select]").forEach((sel) => fillProductSelect(sel));
+        } catch (e) {
+          $("#tbl-produtos").innerHTML = `<tr><td colspan="4">${escapeHtml(e.message)}</td></tr>`;
+        }
+      }
+
+      function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      function fillProductSelect(sel) {
+        const v = sel.value;
+        sel.innerHTML = '<option value="">— produto —</option>';
+        productsCache.forEach((p) => {
+          const o = document.createElement("option");
+          o.value = p.id;
+          o.textContent = p.sku + " — " + p.name;
+          sel.appendChild(o);
+        });
+        if (v) sel.value = v;
+      }
+
+      function addLine(container, kind) {
+        const id = "ln-" + Math.random().toString(36).slice(2);
+        const wrap = document.createElement("div");
+        wrap.className = "line-row";
+        wrap.dataset.line = "1";
+        const priceLabel = kind === "c" ? "Custo unit." : "Preço unit.";
+        const priceName = kind === "c" ? "cost" : "price";
+        wrap.innerHTML = `
+          <label>Produto <select data-product-select id="${id}-p"></select></label>
+          <label>Qtd <input type="number" data-qty step="0.0001" min="0" value="1" /></label>
+          <label>${priceLabel} <input type="number" data-unit step="0.01" min="0" value="0" /></label>
+          <button type="button" class="btn small" data-remove>✕</button>`;
+        container.appendChild(wrap);
+        fillProductSelect($("#" + id + "-p", wrap));
+        $("[data-remove]", wrap).addEventListener("click", () => wrap.remove());
+      }
+
+      function collectLines(container, kind) {
+        const rows = $$("[data-line]", container);
+        const lines = [];
+        for (const row of rows) {
+          const pid = $("select[data-product-select]", row).value;
+          const q = $("input[data-qty]", row);
+          const pu = $("input[data-unit]", row);
+          if (!pid) continue;
+          const qty = parseFloat(q.value);
+          const unit = parseFloat(pu.value);
+          if (!qty || qty <= 0) throw new Error("Informe quantidade > 0 em todas as linhas.");
+          const line =
+            kind === "c"
+              ? { product_id: parseInt(pid, 10), qty: String(qty), unit_cost: String(unit) }
+              : { product_id: parseInt(pid, 10), qty: String(qty), unit_price: String(unit) };
+          lines.push(line);
+        }
+        return lines;
+      }
+
+      function showMsg(id, ok, text) {
+        const el = $(id);
+        el.className = "msg " + (ok ? "ok" : "err");
+        el.textContent = text;
+      }
+
+      // Tabs
+      $$(".tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          $$(".tab").forEach((b) => b.classList.remove("active"));
+          $$(".panel").forEach((p) => p.classList.remove("active"));
+          btn.classList.add("active");
+          $("#" + btn.dataset.panel).classList.add("active");
+          if (btn.dataset.panel === "p-listas") loadLists();
+        });
+      });
+
+      $("#btn-produto").addEventListener("click", async () => {
+        const sku = $("#p-sku").value.trim();
+        const name = $("#p-nome").value.trim();
+        if (!sku || !name) {
+          showMsg("#msg-produto", false, "Preencha SKU e nome.");
+          return;
+        }
+        try {
+          await api("/products", { method: "POST", body: JSON.stringify({ sku, name }) });
+          showMsg("#msg-produto", true, "Produto cadastrado.");
+          $("#p-sku").value = "";
+          $("#p-nome").value = "";
+          await loadProducts();
+          await loadSummary();
+        } catch (e) {
+          showMsg("#msg-produto", false, e.message);
+        }
+      });
+
+      $("#c-add-line").addEventListener("click", () => addLine($("#c-lines"), "c"));
+      $("#v-add-line").addEventListener("click", () => addLine($("#v-lines"), "v"));
+
+      $("#btn-compra").addEventListener("click", async () => {
+        try {
+          const lines = collectLines($("#c-lines"), "c");
+          if (!lines.length) {
+            showMsg("#msg-compra", false, "Inclua ao menos uma linha com produto.");
+            return;
+          }
+          const body = {
+            occurred_on: $("#c-data").value,
+            note: $("#c-note").value || null,
+            lines,
+          };
+          await api("/purchases", { method: "POST", body: JSON.stringify(body) });
+          showMsg("#msg-compra", true, "Compra registrada e lançada no razão.");
+          await loadProducts();
+          await loadSummary();
+        } catch (e) {
+          showMsg("#msg-compra", false, e.message);
+        }
+      });
+
+      $("#btn-venda").addEventListener("click", async () => {
+        try {
+          const lines = collectLines($("#v-lines"), "v");
+          if (!lines.length) {
+            showMsg("#msg-venda", false, "Inclua ao menos uma linha com produto.");
+            return;
+          }
+          const body = {
+            occurred_on: $("#v-data").value,
+            note: $("#v-note").value || null,
+            lines,
+          };
+          await api("/sales", { method: "POST", body: JSON.stringify(body) });
+          showMsg("#msg-venda", true, "Venda registrada e lançada no razão.");
+          await loadProducts();
+          await loadSummary();
+        } catch (e) {
+          showMsg("#msg-venda", false, e.message);
+        }
+      });
+
+      async function loadLists() {
+        try {
+          const [compras, vendas] = await Promise.all([api("/purchases"), api("/sales")]);
+          $("#tbl-compras").innerHTML = compras
+            .slice(0, 30)
+            .map(
+              (x) =>
+                `<tr><td>${x.id}</td><td>${x.occurred_on}</td><td>${x.lines.length}</td></tr>`
+            )
+            .join("");
+          $("#tbl-vendas").innerHTML = vendas
+            .slice(0, 30)
+            .map(
+              (x) =>
+                `<tr><td>${x.id}</td><td>${x.occurred_on}</td><td>${x.lines.length}</td></tr>`
+            )
+            .join("");
+        } catch (e) {
+          $("#tbl-compras").innerHTML = `<tr><td colspan="3">${escapeHtml(e.message)}</td></tr>`;
+        }
+      }
+
+      $("#c-data").value = todayISODate();
+      $("#v-data").value = todayISODate();
+
+      (async function init() {
+        await loadProducts();
+        $("#c-lines").innerHTML = "";
+        $("#v-lines").innerHTML = "";
+        addLine($("#c-lines"), "c");
+        addLine($("#v-lines"), "v");
+        await loadSummary();
+      })();
     </script>
   </body>
 </html>

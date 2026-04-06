@@ -1,6 +1,25 @@
 # cabecao
 
-API **self-hosted** para controle contábil (partidas dobradas) e estoque — projeto próprio, sem dependência de ERP de terceiros.
+Sistema **self-hosted**: contabilidade em **partidas dobradas**, **estoque com custo médio**, **compras e vendas à vista** (lançamentos automáticos em Caixa, Estoque, Receita e CMV), **API REST** e **painel web** em `/`.
+
+### Funcionalidades
+
+| Módulo | Descrição |
+|--------|-----------|
+| Plano de contas | Seed automático: Caixa (`1.1.01`), Estoque (`1.1.02`), Receita (`4.1.01`), CMV (`5.1.01`) |
+| Produtos | Cadastro SKU/nome, quantidade e custo médio |
+| Compras | Dr Estoque / Cr Caixa; atualiza custo médio |
+| Vendas | Dr Caixa / Cr Receita e Dr CMV / Cr Estoque; valida estoque |
+| Painel | Abas: resumo, produtos, nova compra/venda, histórico |
+
+### API (`/api`)
+
+- `GET /api/dashboard/summary` — saldos de Caixa e Estoque, contagens
+- `GET|POST /api/products`
+- `GET|POST /api/purchases` · `GET /api/purchases/{id}`
+- `GET|POST /api/sales` · `GET /api/sales/{id}`
+
+Detalhes em `/docs` (Swagger).
 
 ## Requisitos
 
