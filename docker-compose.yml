@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cabecao
+      POSTGRES_PASSWORD: cabecao
+      POSTGRES_DB: cabecao
+    ports:
+      - "5432:5432"
+    volumes:
+      - cabecao_pgdata:/var/lib/postgresql/data
+
+volumes:
+  cabecao_pgdata:
