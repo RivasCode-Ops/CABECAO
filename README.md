@@ -19,14 +19,28 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-4. API:
+4. Subir a API + site no navegador:
 
 ```powershell
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-- Saúde: http://127.0.0.1:8000/health  
-- Documentação: http://127.0.0.1:8000/docs  
+| O que | URL |
+|--------|-----|
+| **Site (painel)** | http://127.0.0.1:8000/ |
+| API JSON | http://127.0.0.1:8000/health |
+| Swagger | http://127.0.0.1:8000/docs |
+
+Na rede local (celular/outro PC), use `--host 0.0.0.0` e acesse `http://SEU_IP:8000/` (veja firewall do Windows).
+
+### Testar “online” por URL pública (temporário)
+
+Ferramentas de túnel expõem o `localhost` na internet só enquanto o processo rodar — útil para demonstração, não substitui hospedagem de produção.
+
+- [ngrok](https://ngrok.com/): após instalar, `ngrok http 8000` e abra a URL `https://....ngrok-free.app`.
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) (`cloudflared tunnel --url http://localhost:8000`).
+
+O painel em `/` chama `/health` e `/health/db` no mesmo origin; funciona atrás do túnel desde que o backend esteja no ar com o banco.
 
 ## Publicar no GitHub (repositório `cabecao`)
 

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CABECAO — Painel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="badge">Self-hosted</div>
+        <h1>CABECAO</h1>
+        <p class="sub">
+          Contabilidade e estoque em servidor próprio. Este painel testa a API pelo seu navegador na mesma URL.
+        </p>
+      </header>
+
+      <div class="grid">
+        <div class="card">
+          <h2>API</h2>
+          <div class="status" id="api-status">
+            <span class="dot pending" id="api-dot"></span>
+            <span id="api-text">Verificando…</span>
+          </div>
+          <p class="meta" id="api-meta"></p>
+        </div>
+        <div class="card">
+          <h2>Banco de dados</h2>
+          <div class="status" id="db-status">
+            <span class="dot pending" id="db-dot"></span>
+            <span id="db-text">Verificando…</span>
+          </div>
+          <p class="meta" id="db-meta"></p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn" id="btn-refresh">Atualizar status</button>
+        <a class="btn primary" href="/docs" target="_blank" rel="noopener">Abrir documentação Swagger</a>
+        <a class="btn" href="/health" target="_blank" rel="noopener">JSON /health</a>
+      </div>
+
+      <footer>
+        URL atual: <span id="origin"></span> — use o mesmo host/porta onde o Uvicorn estiver rodando.
+      </footer>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function setCard(prefix, ok, text, meta) {
+        const dot = $(prefix + "-dot");
+        const t = $(prefix + "-text");
+        const m = $(prefix + "-meta");
+        dot.className = "dot " + (ok === true ? "ok" : ok === false ? "err" : "pending");
+        t.textContent = text;
+        m.textContent = meta || "";
+      }
+
+      async function check() {
+        setCard("api", null, "Verificando…", "");
+        setCard("db", null, "Verificando…", "");
+
+        try {
+          const r = await fetch("/health", { cache: "no-store" });
+          const j = await r.json();
+          setCard("api", r.ok, r.ok ? "Online" : "Erro", JSON.stringify(j));
+        } catch (e) {
+          setCard("api", false, "Offline ou CORS", String(e.message));
+        }
+
+        try {
+          const r = await fetch("/health/db", { cache: "no-store" });
+          const j = await r.json();
+          setCard("db", r.ok, r.ok ? "Conectado" : "Erro", JSON.stringify(j));
+        } catch (e) {
+          setCard("db", false, "Falhou", String(e.message));
+        }
+      }
+
+      $("origin").textContent = window.location.origin;
+      $("btn-refresh").addEventListener("click", check);
+      check();
+    </script>
+  </body>
+</html>
